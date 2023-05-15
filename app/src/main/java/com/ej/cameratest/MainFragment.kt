@@ -32,8 +32,14 @@ class MainFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         binding.camera.setOnClickListener {
-            val intent = Intent(requireContext(),CameraActivity::class.java)
-            activity?.startActivityForResult(intent, CAMERA_CODE)
+//            val intent = Intent(requireContext(),CameraActivity::class.java)
+//            activity?.startActivityForResult(intent, CAMERA_CODE)
+
+            val cameraFragment = CameraFragment.newInstance()
+            val transcation = parentFragmentManager.beginTransaction()
+            transcation.replace(R.id.frameLayout,cameraFragment)
+            transcation.addToBackStack("camera")
+            transcation.commit()
         }
     }
 

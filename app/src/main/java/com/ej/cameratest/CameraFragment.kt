@@ -1,7 +1,6 @@
 package com.ej.cameratest
 
 import android.Manifest
-import android.R.attr
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,6 +10,10 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
+import androidx.fragment.app.Fragment
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
@@ -21,45 +24,46 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
-import com.ej.cameratest.databinding.ActivityCameraBinding
+import com.ej.cameratest.databinding.FragmentCameraBinding
+import com.ej.cameratest.databinding.FragmentMainBinding
 import java.io.ByteArrayOutputStream
-import java.io.FileOutputStream
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 
-class CameraActivity : AppCompatActivity() {
-    lateinit var binding: ActivityCameraBinding
+class CameraFragment : Fragment() {
+    lateinit var binding: FragmentCameraBinding
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
-
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = DataBindingUtil.setContentView(this, R.layout.activity_camera)
-        binding.lifecycleOwner = this
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        // Inflate the layout for this fragment
+        binding = DataBindingUtil.inflate(inflater,R.layout.fragment_camera,container, false)
+        binding.lifecycleOwner = this.viewLifecycleOwner
 
         // Request camera permissions
         if (allPermissionsGranted()) {
             startCamera()
         } else {
             ActivityCompat.requestPermissions(
-                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
+                requireActivity(), REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS
+            )
         }
+        return binding.root
+    }
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
         binding.imageCaptureButton.setOnClickListener { takePhoto() }
 //        binding.videoCaptureButton.setOnClickListener { captureVideo() }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
 
-    override fun onStart() {
-        super.onStart()
 
-    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -74,17 +78,17 @@ class CameraActivity : AppCompatActivity() {
             if (allPermissionsGranted()) {
                 startCamera()
             } else {
-                Toast.makeText(this,
+                Toast.makeText(requireContext(),
                     "Permissions not granted by the user.",
                     Toast.LENGTH_SHORT).show()
-                finish()
+                activity?.finish()
             }
         }
     }
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(
-            baseContext, it) == PackageManager.PERMISSION_GRANTED
+            activity?.baseContext!!, it) == PackageManager.PERMISSION_GRANTED
     }
     private fun takePhoto() {
         // Get a stable reference of the modifiable image capture use case
@@ -104,7 +108,7 @@ class CameraActivity : AppCompatActivity() {
 
         // Create output options object which contains file + metadata
         val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(contentResolver,
+            .Builder(requireActivity().contentResolver,
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 contentValues)
             .build()
@@ -113,7 +117,7 @@ class CameraActivity : AppCompatActivity() {
         // been taken
         imageCapture.takePicture(
             outputOptions,
-            ContextCompat.getMainExecutor(this),
+            ContextCompat.getMainExecutor(requireActivity()),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(exc: ImageCaptureException) {
                     Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
@@ -125,23 +129,20 @@ class CameraActivity : AppCompatActivity() {
 
                         var bitmap : Bitmap? = null
                         try {
-                            bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUrl)
+                            bitmap = MediaStore.Images.Media.getBitmap(requireActivity().contentResolver, imageUrl)
                         } catch (e: IOException) {
                             e.printStackTrace()
                         }
 
                         val resizedBitmap = Bitmap.createScaledBitmap(bitmap!!, bitmap.getWidth() / 5, bitmap.getHeight() / 5, false);
                         val outStream = ByteArrayOutputStream()
-                        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 1, outStream)
+                        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 30, outStream)
                         val byteArray = outStream.toByteArray()
                         val compressedBitmap = BitmapFactory.decodeByteArray(byteArray,0,byteArray.size)
 
                         binding.cameraImg.setImageBitmap(compressedBitmap)
+                        parentFragmentManager.popBackStack()
 
-                        val resultIntent = Intent()
-                        resultIntent.putExtra(PHOTO_IMAGE,1)
-                        setResult(RESULT_OK, resultIntent)
-                        finish()
                     }catch (e: Exception) {
                         Log.e(TAG, "Photo capture not exist: ${e.message}")
 
@@ -153,7 +154,7 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun startCamera() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(requireActivity())
 
 
         cameraProviderFuture.addListener({
@@ -188,10 +189,14 @@ class CameraActivity : AppCompatActivity() {
                 Log.e(TAG, "Use case binding failed", exc)
             }
 
-        }, ContextCompat.getMainExecutor(this))
+        }, ContextCompat.getMainExecutor(requireActivity()))
     }
-
     companion object {
+
+        @JvmStatic
+        fun newInstance() =
+            CameraFragment()
+
         val PHOTO_IMAGE = "photo_image"
         private const val TAG = "CameraXApp"
         private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
