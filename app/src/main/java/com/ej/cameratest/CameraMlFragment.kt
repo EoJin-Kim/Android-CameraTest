@@ -1,7 +1,9 @@
 package com.ej.cameratest
 
+import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
+import android.util.Size
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
@@ -11,15 +13,26 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.impl.utils.ContextUtil.getApplicationContext
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.ViewModelProvider
 import com.ej.cameratest.databinding.FragmentCameraBinding
 import com.ej.cameratest.databinding.FragmentCameraMlBinding
 import com.ej.cameratest.objectdetector.ObjectDetectorProcessor
+import com.ej.cameratest.objectdetector.ObjectGraphic
 import com.google.mlkit.common.MlKitException
 import com.google.mlkit.common.model.LocalModel
+import com.google.mlkit.vision.camera.CameraSourceConfig
+import com.google.mlkit.vision.camera.CameraXSource
+import com.google.mlkit.vision.camera.DetectionTaskCallback
+import com.google.mlkit.vision.objects.DetectedObject
+import com.google.mlkit.vision.objects.ObjectDetection
+import com.google.mlkit.vision.objects.ObjectDetector
+import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions
+import java.util.*
 
 
 class CameraMlFragment : Fragment() {
@@ -27,19 +40,14 @@ class CameraMlFragment : Fragment() {
     lateinit var binding: FragmentCameraMlBinding
     lateinit var viewModel : CameraMlViewModel
 
-    private var lensFacing = CameraSelector.LENS_FACING_BACK
-    private var cameraSelector: CameraSelector? = null
+    private var previewView: PreviewView? = null
     private var graphicOverlay: GraphicOverlay? = null
-    private var cameraProvider: ProcessCameraProvider? = null
-    private var previewUseCase: Preview? = null
-    private var analysisUseCase: ImageAnalysis? = null
-    private var imageProcessor: VisionImageProcessor? = null
+    private var cameraXSource: CameraXSource? = null
+    private var customObjectDetectorOptions: CustomObjectDetectorOptions? = null
+    private var lensFacing: Int = CameraSourceConfig.CAMERA_FACING_BACK
+    private var targetResolution: Size? = null
     private var needUpdateGraphicOverlayImageSourceInfo = false
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-    }
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -49,115 +57,136 @@ class CameraMlFragment : Fragment() {
         binding.lifecycleOwner = this.viewLifecycleOwner
 
 
-        cameraSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
-
         viewModel = ViewModelProvider(
             this,
             ViewModelProvider.AndroidViewModelFactory.getInstance(requireActivity().application)
         )[CameraMlViewModel::class.java]
-        graphicOverlay = binding.graphicOverlay
-
-        if (graphicOverlay == null) {
-            Log.d(TAG, "graphicOverlay is null")
-        }
-        viewModel.getProcessCameraProvider()?.observe(viewLifecycleOwner){ provider ->
-            cameraProvider = provider
-            bindAllCameraUseCases()
-        }
 
         return binding.root
     }
 
-    private fun bindAllCameraUseCases() {
-        if (cameraProvider != null) {
-            // As required by CameraX API, unbinds all use cases before trying to re-bind any of them.
-            cameraProvider!!.unbindAll()
-            bindPreviewUseCase()
-            bindAnalysisUseCase()
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        previewView = binding.previewView
+        graphicOverlay = binding.graphicOverlay
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (cameraXSource != null &&
+            PreferenceUtils.getCustomObjectDetectorOptionsForLivePreview(requireContext(), localModel)
+                .equals(customObjectDetectorOptions) &&
+            PreferenceUtils.getCameraXTargetResolution(requireActivity().applicationContext, lensFacing) != null &&
+            (Objects.requireNonNull(
+                PreferenceUtils.getCameraXTargetResolution(requireActivity().applicationContext, lensFacing)
+            ) == targetResolution)
+        ) {
+            cameraXSource!!.start()
+        } else {
+            createThenStartCameraXSource()
         }
     }
 
-    private fun bindPreviewUseCase() {
-        if (!PreferenceUtils.isCameraLiveViewportEnabled(requireContext())) {
-            return
-        }
-        if (cameraProvider == null) {
-            return
-        }
-        if (previewUseCase != null) {
-            cameraProvider!!.unbind(previewUseCase)
+    override fun onPause() {
+        super.onPause()
+        if (cameraXSource != null) {
+            cameraXSource!!.stop()
         }
     }
 
-
-
-    private fun bindAnalysisUseCase() {
-        if (cameraProvider == null) {
-            return
+    override fun onDestroy() {
+        super.onDestroy()
+        if (cameraXSource != null) {
+            cameraXSource!!.stop()
         }
-        if (analysisUseCase != null) {
-            cameraProvider!!.unbind(analysisUseCase)
-        }
-        if (imageProcessor != null) {
-            imageProcessor!!.stop()
-        }
-        imageProcessor =
-            try {
-                Log.i(TAG, "Using Custom Object Detector (with object labeler) Processor")
-                val localModel =
-                    LocalModel.Builder().setAssetFilePath("custom_models/object_labeler.tflite").build()
-                val customObjectDetectorOptions =
-                    PreferenceUtils.getCustomObjectDetectorOptionsForLivePreview(requireContext(), localModel)
-                ObjectDetectorProcessor(requireContext(), customObjectDetectorOptions)
+    }
 
-            } catch (e: Exception) {
-                Toast.makeText(
-                    requireActivity().applicationContext,
-                    "Can not create image processor: " + e.localizedMessage,
-                    Toast.LENGTH_LONG
-                )
-                    .show()
-                return
+    private fun createThenStartCameraXSource() {
+        if (cameraXSource != null) {
+            cameraXSource!!.close()
+        }
+        customObjectDetectorOptions =
+            PreferenceUtils.getCustomObjectDetectorOptionsForLivePreview(
+                requireActivity().applicationContext,
+                localModel
+            )
+        val objectDetector: ObjectDetector = ObjectDetection.getClient(customObjectDetectorOptions!!)
+        var detectionTaskCallback: DetectionTaskCallback<List<DetectedObject>> =
+            DetectionTaskCallback<List<DetectedObject>> { detectionTask ->
+                detectionTask
+                    .addOnSuccessListener { results -> onDetectionTaskSuccess(results) }
+                    .addOnFailureListener { e -> onDetectionTaskFailure(e) }
             }
-
-        val builder = ImageAnalysis.Builder()
-        val targetResolution = PreferenceUtils.getCameraXTargetResolution(requireContext(), lensFacing)
+        val builder: CameraSourceConfig.Builder =
+            CameraSourceConfig.Builder(requireContext().applicationContext, objectDetector!!, detectionTaskCallback)
+                .setFacing(lensFacing)
+        targetResolution =
+            PreferenceUtils.getCameraXTargetResolution(requireContext().applicationContext, lensFacing)
         if (targetResolution != null) {
-            builder.setTargetResolution(targetResolution)
+            builder.setRequestedPreviewSize(targetResolution!!.width, targetResolution!!.height)
         }
-        analysisUseCase = builder.build()
-
+        cameraXSource = CameraXSource(builder.build(), previewView!!)
         needUpdateGraphicOverlayImageSourceInfo = true
-
-        analysisUseCase?.setAnalyzer(
-            // imageProcessor.processImageProxy will use another thread to run the detection underneath,
-            // thus we can just runs the analyzer itself on main thread.
-            ContextCompat.getMainExecutor(requireContext()),
-            ImageAnalysis.Analyzer { imageProxy: ImageProxy ->
-                if (needUpdateGraphicOverlayImageSourceInfo) {
-                    val isImageFlipped = lensFacing == CameraSelector.LENS_FACING_FRONT
-                    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                    if (rotationDegrees == 0 || rotationDegrees == 180) {
-                        graphicOverlay!!.setImageSourceInfo(imageProxy.width, imageProxy.height, isImageFlipped)
-                    } else {
-                        graphicOverlay!!.setImageSourceInfo(imageProxy.height, imageProxy.width, isImageFlipped)
-                    }
-                    needUpdateGraphicOverlayImageSourceInfo = false
-                }
-                try {
-                    imageProcessor!!.processImageProxy(imageProxy, graphicOverlay)
-                } catch (e: MlKitException) {
-                    Log.e(TAG, "Failed to process image. Error: " + e.localizedMessage)
-                    Toast.makeText(requireContext().applicationContext, e.localizedMessage, Toast.LENGTH_SHORT).show()
-                }
-            }
-        )
-        cameraProvider!!.bindToLifecycle(/* lifecycleOwner= */ this, cameraSelector!!, analysisUseCase)
+        cameraXSource!!.start()
     }
+
+
+    private fun onDetectionTaskSuccess(results: List<DetectedObject>) {
+        graphicOverlay!!.clear()
+        if (needUpdateGraphicOverlayImageSourceInfo) {
+            val size: Size = cameraXSource!!.getPreviewSize()!!
+            if (size != null) {
+                Log.d(TAG, "preview width: " + size.width)
+                Log.d(TAG, "preview height: " + size.height)
+                val isImageFlipped =
+                    cameraXSource!!.getCameraFacing() == CameraSourceConfig.CAMERA_FACING_FRONT
+                if (isPortraitMode) {
+                    // Swap width and height sizes when in portrait, since it will be rotated by
+                    // 90 degrees. The camera preview and the image being processed have the same size.
+                    graphicOverlay!!.setImageSourceInfo(size.height, size.width, isImageFlipped)
+                } else {
+                    graphicOverlay!!.setImageSourceInfo(size.width, size.height, isImageFlipped)
+                }
+                needUpdateGraphicOverlayImageSourceInfo = false
+            } else {
+                Log.d(TAG, "previewsize is null")
+            }
+        }
+        Log.v(TAG, "Number of object been detected: " + results.size)
+        for (`object` in results) {
+            graphicOverlay!!.add(ObjectGraphic(graphicOverlay!!, `object`))
+        }
+        graphicOverlay!!.add(InferenceInfoGraphic(graphicOverlay!!))
+        graphicOverlay!!.postInvalidate()
+    }
+
+    private fun onDetectionTaskFailure(e: Exception) {
+        graphicOverlay!!.clear()
+        graphicOverlay!!.postInvalidate()
+        val error = "Failed to process. Error: " + e.localizedMessage
+        Toast.makeText(
+            graphicOverlay!!.getContext(),
+            """
+   $error
+   Cause: ${e.cause}
+      """.trimIndent(),
+            Toast.LENGTH_SHORT
+        )
+            .show()
+        Log.d(TAG, error)
+    }
+
+    private val isPortraitMode: Boolean
+        private get() =
+            (requireActivity().applicationContext.resources.configuration.orientation !==
+                    Configuration.ORIENTATION_LANDSCAPE)
 
     companion object {
         val TAG = this::class.java.simpleName
         fun newInstance() = CameraMlFragment()
 
+        private val localModel: LocalModel =
+            LocalModel.Builder().setAssetFilePath("custom_models/object_labeler.tflite").build()
     }
 }

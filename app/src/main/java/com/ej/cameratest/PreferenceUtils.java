@@ -359,6 +359,7 @@ public class PreferenceUtils {
     SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
     String prefKey = context.getString(R.string.pref_key_camera_live_viewport);
     return sharedPreferences.getBoolean(prefKey, false);
+//    return true;
   }
 
 //  public static int getFaceMeshUseCase(Context context) {

@@ -60,6 +60,7 @@ dependencies {
 
     implementation 'com.google.guava:guava:27.1-android'
     implementation 'com.google.mlkit:object-detection-custom:17.0.0'
+    implementation 'com.google.mlkit:camera:16.0.0-beta3'
 
     // Image labeling custom
     implementation 'com.google.mlkit:image-labeling-custom:17.0.1'
