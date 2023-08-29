@@ -249,12 +249,13 @@ class CameraFragment : Fragment() {
 
     companion object {
 
+        val TAG = this::class.java.simpleName
+
         @JvmStatic
         fun newInstance() =
             CameraFragment()
 
         val PHOTO_IMAGE = "photo_image"
-        private const val TAG = "CameraXApp"
         private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS =

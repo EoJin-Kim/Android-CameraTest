@@ -9,7 +9,6 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
-import com.ej.cameratest.databinding.ActivityMainBinding
 import com.ej.cameratest.databinding.FragmentMainBinding
 
 
@@ -38,18 +37,20 @@ class MainFragment : Fragment() {
             val cameraFragment = CameraFragment.newInstance()
             val transcation = parentFragmentManager.beginTransaction()
             transcation.replace(R.id.frameLayout,cameraFragment)
-            transcation.addToBackStack("camera")
+            transcation.addToBackStack(CameraFragment.TAG)
+            transcation.commit()
+        }
+
+        binding.camera2.setOnClickListener {
+            val cameraFragment = CameraMlFragment.newInstance()
+            val transcation = parentFragmentManager.beginTransaction()
+            transcation.replace(R.id.frameLayout,cameraFragment)
+            transcation.addToBackStack(CameraFragment.TAG)
             transcation.commit()
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == CAMERA_CODE && resultCode == AppCompatActivity.RESULT_OK) {
-            val image : Bitmap? = data?.getParcelableExtra(CameraActivity.PHOTO_IMAGE)
-            binding.imageView.setImageBitmap(image)
-        }
-    }
+
     companion object {
         @JvmStatic
         fun newInstance() = MainFragment()

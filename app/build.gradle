@@ -42,6 +42,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.5.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'com.google.android.gms:play-services-base:18.2.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
@@ -56,4 +57,10 @@ dependencies {
     // If you want to additionally use the CameraX View class
     implementation "androidx.camera:camera-view:${camerax_version}"
     implementation "androidx.camera:camera-extensions:${camerax_version}"
+
+    implementation 'com.google.guava:guava:27.1-android'
+    implementation 'com.google.mlkit:object-detection-custom:17.0.0'
+
+    // Image labeling custom
+    implementation 'com.google.mlkit:image-labeling-custom:17.0.1'
 }
