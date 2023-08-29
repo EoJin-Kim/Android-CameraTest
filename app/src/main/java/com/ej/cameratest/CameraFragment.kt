@@ -2,32 +2,28 @@ package com.ej.cameratest
 
 import android.Manifest
 import android.content.ContentValues
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
+import androidx.camera.core.*
+import androidx.camera.core.ImageCapture.OnImageCapturedCallback
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
+import androidx.fragment.app.Fragment
 import com.ej.cameratest.databinding.FragmentCameraBinding
-import com.ej.cameratest.databinding.FragmentMainBinding
 import java.io.ByteArrayOutputStream
-import java.io.IOException
+import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -106,6 +102,22 @@ class CameraFragment : Fragment() {
             }
         }
 
+        val imageCaptureCallback: OnImageCapturedCallback = object : OnImageCapturedCallback() {
+            override fun onCaptureSuccess(image: ImageProxy) {
+                // ImageProxy에서 Bitmap으로 변환합니다.
+                val bitmap: Bitmap = imageToBitmap(image)
+
+                // Bitmap을 사용하거나 처리합니다.
+
+                // ImageProxy를 닫습니다.
+                image.close()
+            }
+
+            override fun onError(exception: ImageCaptureException) {
+                // 캡처 오류 처리
+            }
+        }
+
         // Create output options object which contains file + metadata
         val outputOptions = ImageCapture.OutputFileOptions
             .Builder(requireActivity().contentResolver,
@@ -113,44 +125,80 @@ class CameraFragment : Fragment() {
                 contentValues)
             .build()
 
+
         // Set up image capture listener, which is triggered after photo has
         // been taken
         imageCapture.takePicture(
-            outputOptions,
             ContextCompat.getMainExecutor(requireActivity()),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    super.onCaptureSuccess(image)
+
+                    val bitmap: Bitmap = imageToBitmap(image)
+//                    binding.cameraImg.setImageBitmap(bitmap)
+
+                    val resizedBitmap = Bitmap.createScaledBitmap(bitmap!!, bitmap.getWidth() / 5, bitmap.getHeight() / 5, false);
+
+                    val outStream = ByteArrayOutputStream()
+                    resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 30, outStream)
+                    val byteArray = outStream.toByteArray()
+                    val compressedBitmap = BitmapFactory.decodeByteArray(byteArray,0,byteArray.size)
+                    val rotateBM = rotateBitmap(compressedBitmap)
+                    binding.cameraImg.setImageBitmap(rotateBM)
+                    // Bitmap을 사용하거나 처리합니다.
+
+                    // ImageProxy를 닫습니다.
+
+                    // Bitmap을 사용하거나 처리합니다.
+
+                    // ImageProxy를 닫습니다.
+                    image.close()
                 }
 
-                override fun onImageSaved(output: ImageCapture.OutputFileResults){
-                    try {
-                        val imageUrl = output.savedUri!!
-
-                        var bitmap : Bitmap? = null
-                        try {
-                            bitmap = MediaStore.Images.Media.getBitmap(requireActivity().contentResolver, imageUrl)
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                        }
-
-                        val resizedBitmap = Bitmap.createScaledBitmap(bitmap!!, bitmap.getWidth() / 5, bitmap.getHeight() / 5, false);
-                        val outStream = ByteArrayOutputStream()
-                        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 30, outStream)
-                        val byteArray = outStream.toByteArray()
-                        val compressedBitmap = BitmapFactory.decodeByteArray(byteArray,0,byteArray.size)
-
-                        binding.cameraImg.setImageBitmap(compressedBitmap)
-                        parentFragmentManager.popBackStack()
-
-                    }catch (e: Exception) {
-                        Log.e(TAG, "Photo capture not exist: ${e.message}")
-
-                    }
-
+                override fun onError(exception: ImageCaptureException) {
+                    super.onError(exception)
                 }
             }
+//            object : ImageCapture.OnImageSavedCallback {
+//                override fun onError(exc: ImageCaptureException) {
+//                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+//                }
+//
+//                override fun onImageSaved(output: ImageCapture.OutputFileResults){
+//                    try {
+//                        val imageUrl = output.savedUri!!
+//
+//                        var bitmap : Bitmap? = null
+//                        try {
+//                            bitmap = MediaStore.Images.Media.getBitmap(requireActivity().contentResolver, imageUrl)
+//                        } catch (e: IOException) {
+//                            e.printStackTrace()
+//                        }
+//
+//                        val resizedBitmap = Bitmap.createScaledBitmap(bitmap!!, bitmap.getWidth() / 5, bitmap.getHeight() / 5, false);
+//                        val outStream = ByteArrayOutputStream()
+//                        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 30, outStream)
+//                        val byteArray = outStream.toByteArray()
+//                        val compressedBitmap = BitmapFactory.decodeByteArray(byteArray,0,byteArray.size)
+//
+//                        binding.cameraImg.setImageBitmap(compressedBitmap)
+////                        parentFragmentManager.popBackStack()
+//
+//                    }catch (e: Exception) {
+//                        Log.e(TAG, "Photo capture not exist: ${e.message}")
+//
+//                    }
+//
+//                }
+//            }
         )
+    }
+
+    private fun imageToBitmap(image: ImageProxy): Bitmap {
+        val buffer: ByteBuffer = image.planes[0].buffer
+        val bytes = ByteArray(buffer.remaining())
+        buffer.get(bytes)
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
     private fun startCamera() {
@@ -172,7 +220,7 @@ class CameraFragment : Fragment() {
                 .build()
 
             // Select back camera as a default
-            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
                 // Unbind use cases before rebinding
@@ -183,7 +231,7 @@ class CameraFragment : Fragment() {
                     this, cameraSelector, preview, imageCapture)
 
                 // 카메라 줌 비율 1이면 최대 줌
-                cameraControl.cameraControl.setLinearZoom(70/100f)
+//                cameraControl.cameraControl.setLinearZoom(10/100f)
 
             } catch(exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
@@ -191,6 +239,14 @@ class CameraFragment : Fragment() {
 
         }, ContextCompat.getMainExecutor(requireActivity()))
     }
+
+    private fun rotateBitmap(bitmap: Bitmap, ): Bitmap {
+        val matrix = Matrix()
+        matrix.postRotate(90F)
+
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
     companion object {
 
         @JvmStatic
