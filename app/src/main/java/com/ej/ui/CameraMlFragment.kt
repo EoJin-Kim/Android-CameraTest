@@ -1,4 +1,4 @@
-package com.ej.cameratest
+package com.ej.ui
 
 import android.content.res.Configuration
 import android.os.Bundle
@@ -9,21 +9,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageProxy
-import androidx.camera.core.Preview
-import androidx.camera.core.impl.utils.ContextUtil.getApplicationContext
-import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.ViewModelProvider
-import com.ej.cameratest.databinding.FragmentCameraBinding
+import com.ej.cameratest.*
 import com.ej.cameratest.databinding.FragmentCameraMlBinding
-import com.ej.cameratest.objectdetector.ObjectDetectorProcessor
 import com.ej.cameratest.objectdetector.ObjectGraphic
-import com.google.mlkit.common.MlKitException
 import com.google.mlkit.common.model.LocalModel
 import com.google.mlkit.vision.camera.CameraSourceConfig
 import com.google.mlkit.vision.camera.CameraXSource
@@ -53,7 +44,7 @@ class CameraMlFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
-        binding = DataBindingUtil.inflate(inflater,R.layout.fragment_camera_ml,container, false)
+        binding = DataBindingUtil.inflate(inflater, R.layout.fragment_camera_ml,container, false)
         binding.lifecycleOwner = this.viewLifecycleOwner
 
 
@@ -75,11 +66,20 @@ class CameraMlFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         if (cameraXSource != null &&
-            PreferenceUtils.getCustomObjectDetectorOptionsForLivePreview(requireContext(), localModel)
+            PreferenceUtils.getCustomObjectDetectorOptionsForLivePreview(
+                requireContext(),
+                localModel
+            )
                 .equals(customObjectDetectorOptions) &&
-            PreferenceUtils.getCameraXTargetResolution(requireActivity().applicationContext, lensFacing) != null &&
+            PreferenceUtils.getCameraXTargetResolution(
+                requireActivity().applicationContext,
+                lensFacing
+            ) != null &&
             (Objects.requireNonNull(
-                PreferenceUtils.getCameraXTargetResolution(requireActivity().applicationContext, lensFacing)
+                PreferenceUtils.getCameraXTargetResolution(
+                    requireActivity().applicationContext,
+                    lensFacing
+                )
             ) == targetResolution)
         ) {
             cameraXSource!!.start()
@@ -122,7 +122,10 @@ class CameraMlFragment : Fragment() {
             CameraSourceConfig.Builder(requireContext().applicationContext, objectDetector!!, detectionTaskCallback)
                 .setFacing(lensFacing)
         targetResolution =
-            PreferenceUtils.getCameraXTargetResolution(requireContext().applicationContext, lensFacing)
+            PreferenceUtils.getCameraXTargetResolution(
+                requireContext().applicationContext,
+                lensFacing
+            )
         if (targetResolution != null) {
             builder.setRequestedPreviewSize(targetResolution!!.width, targetResolution!!.height)
         }

@@ -6,7 +6,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.databinding.DataBindingUtil
-import com.ej.cameratest.CameraMlFragment
 import com.ej.cameratest.R
 import com.ej.cameratest.databinding.FragmentMainBinding
 
