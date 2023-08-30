@@ -1,7 +1,6 @@
-package com.ej.cameratest
+package com.ej.cameratest.ui
 
 import android.Manifest
-import android.R.attr
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,12 +20,10 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
+import com.ej.cameratest.R
 import com.ej.cameratest.databinding.ActivityCameraBinding
 import java.io.ByteArrayOutputStream
-import java.io.FileOutputStream
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -47,7 +44,8 @@ class CameraActivity : AppCompatActivity() {
             startCamera()
         } else {
             ActivityCompat.requestPermissions(
-                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
+                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS
+            )
         }
 
         binding.imageCaptureButton.setOnClickListener { takePhoto() }

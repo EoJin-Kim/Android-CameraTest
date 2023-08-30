@@ -1,4 +1,4 @@
-package com.ej.cameratest
+package com.ej.cameratest.ui
 
 import android.Manifest
 import android.content.ContentValues
@@ -21,6 +21,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
 import androidx.fragment.app.Fragment
+import com.ej.cameratest.R
 import com.ej.cameratest.databinding.FragmentCameraBinding
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -37,7 +38,7 @@ class CameraFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
-        binding = DataBindingUtil.inflate(inflater,R.layout.fragment_camera,container, false)
+        binding = DataBindingUtil.inflate(inflater, R.layout.fragment_camera,container, false)
         binding.lifecycleOwner = this.viewLifecycleOwner
 
         // Request camera permissions

@@ -1,4 +1,4 @@
-package com.ej.cameratest
+package com.ej.cameratest.ui
 
 import android.os.Bundle
 import android.util.Log
@@ -15,7 +15,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.ViewModelProvider
-import com.ej.cameratest.databinding.FragmentCameraBinding
+import com.ej.cameratest.*
 import com.ej.cameratest.databinding.FragmentCameraMlBinding
 import com.ej.cameratest.objectdetector.ObjectDetectorProcessor
 import com.google.mlkit.common.MlKitException
@@ -45,7 +45,7 @@ class CameraMlFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
-        binding = DataBindingUtil.inflate(inflater,R.layout.fragment_camera_ml,container, false)
+        binding = DataBindingUtil.inflate(inflater, R.layout.fragment_camera_ml,container, false)
         binding.lifecycleOwner = this.viewLifecycleOwner
 
 
@@ -107,7 +107,10 @@ class CameraMlFragment : Fragment() {
                 val localModel =
                     LocalModel.Builder().setAssetFilePath("custom_models/object_labeler.tflite").build()
                 val customObjectDetectorOptions =
-                    PreferenceUtils.getCustomObjectDetectorOptionsForLivePreview(requireContext(), localModel)
+                    PreferenceUtils.getCustomObjectDetectorOptionsForLivePreview(
+                        requireContext(),
+                        localModel
+                    )
                 ObjectDetectorProcessor(requireContext(), customObjectDetectorOptions)
 
             } catch (e: Exception) {
@@ -121,7 +124,8 @@ class CameraMlFragment : Fragment() {
             }
 
         val builder = ImageAnalysis.Builder()
-        val targetResolution = PreferenceUtils.getCameraXTargetResolution(requireContext(), lensFacing)
+        val targetResolution =
+            PreferenceUtils.getCameraXTargetResolution(requireContext(), lensFacing)
         if (targetResolution != null) {
             builder.setTargetResolution(targetResolution)
         }
