@@ -66,7 +66,6 @@ class ObjectGraphic constructor(
 
     // Calculate width and height of label box
     for (label in detectedObject.labels) {
-      if(label.index != 122) return
       textWidth =
         max(textWidth, textPaints[colorID].measureText(label.text))
       textWidth = max(

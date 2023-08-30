@@ -1,7 +1,13 @@
 package com.ej.ui
 
+import android.content.ContentValues
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
 import androidx.fragment.app.Fragment
@@ -9,10 +15,13 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
-import androidx.lifecycle.ViewModelProvider
 import com.ej.cameratest.*
+import com.ej.cameratest.R
 import com.ej.cameratest.databinding.FragmentCameraMlBinding
 import com.ej.cameratest.objectdetector.ObjectGraphic
 import com.google.mlkit.common.model.LocalModel
@@ -23,13 +32,16 @@ import com.google.mlkit.vision.objects.DetectedObject
 import com.google.mlkit.vision.objects.ObjectDetection
 import com.google.mlkit.vision.objects.ObjectDetector
 import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 import java.util.*
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 
 class CameraMlFragment : Fragment() {
 
     lateinit var binding: FragmentCameraMlBinding
-    lateinit var viewModel : CameraMlViewModel
 
     private var previewView: PreviewView? = null
     private var graphicOverlay: GraphicOverlay? = null
@@ -39,6 +51,8 @@ class CameraMlFragment : Fragment() {
     private var targetResolution: Size? = null
     private var needUpdateGraphicOverlayImageSourceInfo = false
 
+    private var imageCapture: ImageCapture? = null
+    private lateinit var cameraExecutor: ExecutorService
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -47,11 +61,7 @@ class CameraMlFragment : Fragment() {
         binding = DataBindingUtil.inflate(inflater, R.layout.fragment_camera_ml,container, false)
         binding.lifecycleOwner = this.viewLifecycleOwner
 
-
-        viewModel = ViewModelProvider(
-            this,
-            ViewModelProvider.AndroidViewModelFactory.getInstance(requireActivity().application)
-        )[CameraMlViewModel::class.java]
+        startCamera()
 
         return binding.root
     }
@@ -61,6 +71,9 @@ class CameraMlFragment : Fragment() {
 
         previewView = binding.previewView
         graphicOverlay = binding.graphicOverlay
+
+        cameraExecutor = Executors.newSingleThreadExecutor()
+
     }
 
     override fun onResume() {
@@ -100,6 +113,46 @@ class CameraMlFragment : Fragment() {
         if (cameraXSource != null) {
             cameraXSource!!.stop()
         }
+        cameraExecutor.shutdown()
+    }
+
+    private fun startCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(requireActivity())
+
+
+        cameraProviderFuture.addListener({
+            // Used to bind the lifecycle of cameras to the lifecycle owner
+            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+
+            // Preview
+            val preview : Preview = Preview.Builder()
+                .build()
+                .also {
+                    it.setSurfaceProvider(binding.previewView.surfaceProvider)
+                }
+
+            imageCapture = ImageCapture.Builder()
+                .build()
+
+            // Select back camera as a default
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+            try {
+                // Unbind use cases before rebinding
+                cameraProvider.unbindAll()
+
+                // Bind use cases to camera
+                val cameraControl = cameraProvider.bindToLifecycle(
+                    this, cameraSelector, preview, imageCapture)
+
+                // 카메라 줌 비율 1이면 최대 줌
+//                cameraControl.cameraControl.setLinearZoom(10/100f)
+
+            } catch(exc: Exception) {
+                Log.e(CameraFragment.TAG, "Use case binding failed", exc)
+            }
+
+        }, ContextCompat.getMainExecutor(requireActivity()))
     }
 
     private fun createThenStartCameraXSource() {
@@ -157,11 +210,69 @@ class CameraMlFragment : Fragment() {
             }
         }
         Log.v(TAG, "Number of object been detected: " + results.size)
-        for (`object` in results) {
-            graphicOverlay!!.add(ObjectGraphic(graphicOverlay!!, `object`))
+        for (result in results) {
+            val boundingBox = result.boundingBox
+            for (label in result.labels) {
+                if(label.index == 122) {
+                    graphicOverlay!!.add(ObjectGraphic(graphicOverlay!!, result))
+                    takePhoto()
+                }
+            }
         }
         graphicOverlay!!.add(InferenceInfoGraphic(graphicOverlay!!))
         graphicOverlay!!.postInvalidate()
+    }
+
+    private fun takePhoto() {
+        val imageCapture = imageCapture ?: return
+
+        // Set up image capture listener, which is triggered after photo has
+        // been taken
+        imageCapture.takePicture(
+            ContextCompat.getMainExecutor(requireActivity()),
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    super.onCaptureSuccess(image)
+
+                    val bitmap: Bitmap = imageToBitmap(image)
+//                    binding.cameraImg.setImageBitmap(bitmap)
+
+                    val resizedBitmap = Bitmap.createScaledBitmap(bitmap!!, bitmap.getWidth() / 5, bitmap.getHeight() / 5, false);
+
+                    val outStream = ByteArrayOutputStream()
+                    resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 30, outStream)
+                    val byteArray = outStream.toByteArray()
+                    val compressedBitmap = BitmapFactory.decodeByteArray(byteArray,0,byteArray.size)
+                    val rotateBM = rotateBitmap(compressedBitmap)
+                    binding.imgCapture.setImageBitmap(rotateBM)
+                    // Bitmap을 사용하거나 처리합니다.
+
+                    // ImageProxy를 닫습니다.
+
+                    // Bitmap을 사용하거나 처리합니다.
+
+                    // ImageProxy를 닫습니다.
+                    image.close()
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    super.onError(exception)
+                }
+            }
+        )
+    }
+    private fun rotateBitmap(bitmap: Bitmap, ): Bitmap {
+        val matrix = Matrix()
+        matrix.postRotate(90F)
+
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    private fun imageToBitmap(image: ImageProxy): Bitmap {
+        val buffer: ByteBuffer = image.planes[0].buffer
+        val bytes = ByteArray(buffer.remaining())
+        buffer.get(bytes)
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
     private fun onDetectionTaskFailure(e: Exception) {
